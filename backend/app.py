@@ -7,7 +7,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from utils.db import engine
 from models.base import Base
-
 # -------------------------------------
 # Load Environment Variables
 # -------------------------------------
@@ -25,7 +24,6 @@ def create_app():
     app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "super-secret-key")
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "jwt-secret-key")
     app.config["ENV"] = os.getenv("FLASK_ENV", "development")
-
     # -------------------------------------
     # Database Initialization (Dev Only)
     # -------------------------------------
@@ -51,6 +49,7 @@ def create_app():
     from controllers.patient_controller import patient_bp
     from controllers.report_controller import report_bp
     from controllers.department_controller import department_bp
+    from controllers.availability_slot_controller import slot_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(appointment_bp, url_prefix="/api/appointments")
@@ -59,6 +58,7 @@ def create_app():
     app.register_blueprint(patient_bp, url_prefix="/api/patients")
     app.register_blueprint(report_bp, url_prefix="/api/reports")
     app.register_blueprint(department_bp, url_prefix="/api/departments")
+    app.register_blueprint(slot_bp, url_prefix="/api/slots")
 
     # -------------------------------------
     # Root Health Check

@@ -75,10 +75,10 @@ def login():
 
         # Create JWT token
         access_token = create_access_token(
-            identity=user.id,
-            additional_claims={"role": user.role},
-            expires_delta=timedelta(hours=2)
-        )
+    identity=str(user.id),
+    additional_claims={"role": user.role},
+    expires_delta=timedelta(hours=2)
+)
 
         return jsonify({
             "message": "Login successful",

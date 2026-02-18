@@ -8,10 +8,16 @@ from utils.db import get_db_session
 # -----------------------------------------
 def create_department_service(name, description):
     session = get_db_session()
+    # Normalize input
+    name = name.strip()
     try:
-        existing = session.query(Department).filter(Department.name == name).first()
+        existing = (
+            session.query(Department)
+            .filter(Department.name.ilike(name))
+            .first()
+        )
         if existing:
-            raise ValueError("Department already exists")
+            raise ValueError(f"Department '{existing.name}' already exists")
 
         department = Department(
             name=name,
