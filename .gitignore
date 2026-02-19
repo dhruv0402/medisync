@@ -1,3 +1,19 @@
-backend/.env
-backend/venv/
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+backend/venv/
+
+# Environment files
+.env
+
+# VSCode
+.vscode/
+
+# Mac
+.DS_Store

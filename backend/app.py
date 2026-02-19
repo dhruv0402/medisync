@@ -4,7 +4,7 @@ from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
-
+from sqlalchemy import text
 from utils.db import engine
 from models.base import Base
 # -------------------------------------
@@ -59,7 +59,6 @@ def create_app():
     app.register_blueprint(report_bp, url_prefix="/api/reports")
     app.register_blueprint(department_bp, url_prefix="/api/departments")
     app.register_blueprint(slot_bp, url_prefix="/api/slots")
-
     # -------------------------------------
     # Root Health Check
     # -------------------------------------
@@ -74,19 +73,23 @@ def create_app():
     # -------------------------------------
     # Dedicated Health Endpoint
     # -------------------------------------
+    
     @app.route("/health", methods=["GET"])
     def health():
         try:
             with engine.connect() as connection:
-                connection.execute("SELECT 1")
+                connection.execute(text("SELECT 1"))
+
             return jsonify({
                 "status": "healthy",
                 "database": "connected"
             }), 200
-        except Exception:
+
+        except Exception as e:
             return jsonify({
                 "status": "unhealthy",
-                "database": "disconnected"
+                "database": "disconnected",
+                "error": str(e)
             }), 500
 
     # -------------------------------------
