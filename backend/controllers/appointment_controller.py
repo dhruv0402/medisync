@@ -123,8 +123,9 @@ def book_appointment():
     except ValueError as ve:
         return jsonify({"error": str(ve)}), 400
 
-    except Exception:
-        return jsonify({"error": "Internal server error"}), 500
+    except Exception as e:
+        print("BOOK APPOINTMENT ERROR:", str(e))
+        raise e
 
 
 # -------------------------------------------------

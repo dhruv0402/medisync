@@ -7,10 +7,21 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 from utils.db import engine
 from models.base import Base
+import logging
 # -------------------------------------
 # Load Environment Variables
 # -------------------------------------
 load_dotenv()
+
+# -------------------------------------
+# Structured Logging Configuration
+# -------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+)
+
+logger = logging.getLogger(__name__)
 
 jwt = JWTManager()
 
@@ -29,9 +40,9 @@ def create_app():
     # -------------------------------------
     try:
         Base.metadata.create_all(bind=engine)
-        print("✅ Database tables verified/created.")
+        logger.info("Database tables verified/created.")
     except SQLAlchemyError as e:
-        print("❌ Database initialization failed:", str(e))
+        logger.exception("Database initialization failed")
 
     # -------------------------------------
     # Initialize Extensions
@@ -50,6 +61,8 @@ def create_app():
     from controllers.report_controller import report_bp
     from controllers.department_controller import department_bp
     from controllers.availability_slot_controller import slot_bp
+    from controllers.invoice_controller import invoice_bp
+    from controllers.admin_controller import admin_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/auth")
     app.register_blueprint(appointment_bp, url_prefix="/api/appointments")
@@ -59,15 +72,20 @@ def create_app():
     app.register_blueprint(report_bp, url_prefix="/api/reports")
     app.register_blueprint(department_bp, url_prefix="/api/departments")
     app.register_blueprint(slot_bp, url_prefix="/api/slots")
+    app.register_blueprint(invoice_bp)
+    app.register_blueprint(admin_bp)
     # -------------------------------------
     # Root Health Check
     # -------------------------------------
     @app.route("/", methods=["GET"])
     def root():
         return jsonify({
-            "status": "running",
-            "service": "MediSync API",
-            "environment": app.config["ENV"]
+            "success": True,
+            "data": {
+                "status": "running",
+                "service": "MediSync API",
+                "environment": app.config["ENV"]
+            }
         }), 200
 
     # -------------------------------------
@@ -81,15 +99,18 @@ def create_app():
                 connection.execute(text("SELECT 1"))
 
             return jsonify({
-                "status": "healthy",
-                "database": "connected"
+                "success": True,
+                "data": {
+                    "status": "healthy",
+                    "database": "connected"
+                }
             }), 200
 
         except Exception as e:
+            logger.exception("Health check failed")
             return jsonify({
-                "status": "unhealthy",
-                "database": "disconnected",
-                "error": str(e)
+                "success": False,
+                "error": "Service unhealthy"
             }), 500
 
     # -------------------------------------
@@ -97,19 +118,38 @@ def create_app():
     # -------------------------------------
     @app.errorhandler(404)
     def not_found(e):
+        logger.warning(f"404 - Route not found: {str(e)}")
         return jsonify({
-            "error": "Route Not Found",
-            "message": str(e)
+            "success": False,
+            "error": "Route Not Found"
         }), 404
 
     # -------------------------------------
     # Global Error Handler
     # -------------------------------------
+    @app.errorhandler(ValueError)
+    def handle_value_error(e):
+        logger.warning(f"Client error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 400
+
+    @app.errorhandler(SQLAlchemyError)
+    def handle_db_error(e):
+        logger.exception("Database error occurred")
+        return jsonify({
+            "success": False,
+            "error": "Database error"
+        }), 500
+
     @app.errorhandler(Exception)
     def handle_exception(e):
+        import traceback
+        traceback.print_exc()
         return jsonify({
-            "error": "Internal Server Error",
-            "message": str(e)
+            "success": False,
+            "error": str(e)
         }), 500
 
     return app

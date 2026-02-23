@@ -8,7 +8,8 @@ from utils.db import get_db_session
 
 from datetime import date as dt_date
 from datetime import datetime, timedelta
-from services.billing_service import create_invoice_for_appointment
+from services.billing_queue import enqueue_billing_job
+from models.invoice import Invoice
 import redis
 import os
 
@@ -151,56 +152,67 @@ def get_available_slots(doctor_id, date):
 # -------------------------------------------------
 def book_appointment_service(patient_id, doctor_id, slot_id, appointment_date):
     session = get_db_session()
-    lock_key = f"lock:slot:{slot_id}"
+    lock_key = f"lock:doctor:{doctor_id}:date:{appointment_date}:slot:{slot_id}"
 
     try:
-        # ---------------------------
-        # Acquire Redis Lock
-        # ---------------------------
-        lock = redis_client.set(lock_key, "1", nx=True, ex=LOCK_EXPIRY_SECONDS)
-        if not lock:
+        redis_lock = redis_client.lock(
+            lock_key,
+            timeout=LOCK_EXPIRY_SECONDS,
+            blocking_timeout=3
+        )
+
+        if not redis_lock.acquire(blocking=True):
             raise ValueError("Slot is being booked by another user")
 
-        if appointment_date < dt_date.today():
-            raise ValueError("Cannot book past appointments")
+        with session.begin():
 
-        slot = (
-            session.query(AvailabilitySlot)
-            .filter(
-                AvailabilitySlot.id == slot_id,
-                AvailabilitySlot.doctor_id == doctor_id
+            if appointment_date < dt_date.today():
+                raise ValueError("Cannot book past appointments")
+
+            slot = (
+                session.query(AvailabilitySlot)
+                .filter(
+                    AvailabilitySlot.id == slot_id,
+                    AvailabilitySlot.doctor_id == doctor_id
+                )
+                .with_for_update()
+                .first()
             )
-            .with_for_update()
-            .first()
-        )
 
-        if not slot:
-            raise ValueError("Slot not found")
+            if not slot:
+                raise ValueError("Slot not found")
 
-        if slot.is_booked:
-            raise ValueError("Slot already booked")
+            if slot.is_booked:
+                raise ValueError("Slot already booked")
 
-        # Only ONE scheduled per doctor
-        existing_active = session.query(Appointment).filter(
-            Appointment.patient_id == patient_id,
-            Appointment.doctor_id == doctor_id,
-            Appointment.status == "scheduled"
-        ).first()
+            # Prevent double booking of same slot (only scheduled appointments block it)
+            existing_slot_booking = session.query(Appointment).filter(
+                Appointment.slot_id == slot_id,
+                Appointment.status == "scheduled"
+            ).with_for_update().first()
 
-        if existing_active:
-            raise ValueError("You already have an active appointment with this doctor")
+            if existing_slot_booking:
+                raise ValueError("Slot already booked")
 
-        new_appointment = Appointment(
-            patient_id=patient_id,
-            doctor_id=doctor_id,
-            slot_id=slot_id,
-            appointment_date=appointment_date,
-            status="scheduled"
-        )
+            existing_active = session.query(Appointment).filter(
+                Appointment.patient_id == patient_id,
+                Appointment.doctor_id == doctor_id,
+                Appointment.status == "scheduled"
+            ).first()
 
-        session.add(new_appointment)
-        slot.is_booked = True
-        session.commit()
+            if existing_active:
+                raise ValueError("You already have an active appointment with this doctor")
+
+            new_appointment = Appointment(
+                patient_id=patient_id,
+                doctor_id=doctor_id,
+                slot_id=slot_id,
+                appointment_date=appointment_date,
+                status="scheduled"
+            )
+
+            session.add(new_appointment)
+            slot.is_booked = True
 
         return {
             "appointment_id": new_appointment.id,
@@ -209,10 +221,18 @@ def book_appointment_service(patient_id, doctor_id, slot_id, appointment_date):
 
     except Exception as e:
         session.rollback()
+
+        # Gracefully handle duplicate booking race conditions
+        if "IntegrityError" in str(type(e)) or "Duplicate entry" in str(e):
+            raise ValueError("Slot already booked")
+
         raise e
 
     finally:
-        redis_client.delete(lock_key)
+        try:
+            redis_lock.release()
+        except Exception:
+            pass
         session.close()
 
 
@@ -256,10 +276,6 @@ def cancel_appointment_service(appointment_id, patient_id):
 
         return {"message": "Appointment cancelled"}
 
-    except Exception as e:
-        session.rollback()
-        raise e
-
     finally:
         session.close()
 
@@ -271,37 +287,43 @@ def complete_appointment_service(appointment_id):
     session = get_db_session()
 
     try:
-        appointment = (
-            session.query(Appointment)
-            .options(joinedload(Appointment.slot))
-            .filter(Appointment.id == appointment_id)
-            .with_for_update()
-            .first()
-        )
+        with session.begin():
 
-        if not appointment:
-            raise ValueError("Appointment not found")
+            appointment = (
+                session.query(Appointment)
+                .options(joinedload(Appointment.slot))
+                .filter(Appointment.id == appointment_id)
+                .with_for_update()
+                .first()
+            )
 
-        if appointment.status != "scheduled":
-            raise ValueError("Only scheduled appointments can be completed")
+            if not appointment:
+                raise ValueError("Appointment not found")
 
-        if appointment.appointment_date > dt_date.today():
-            raise ValueError("Cannot complete future appointment")
+            # Idempotency
+            if appointment.status == "completed":
+                return {
+                    "appointment_id": appointment.id,
+                    "status": appointment.status,
+                    "message": "Already completed"
+                }
 
-        appointment.status = "completed"
-        session.commit()
-        invoice = create_invoice_for_appointment(appointment)
-        # Trigger billing AFTER commit
+            if appointment.status != "scheduled":
+                raise ValueError("Only scheduled appointments can be completed")
+
+            if appointment.appointment_date > dt_date.today():
+                raise ValueError("Cannot complete future appointment")
+
+            appointment.status = "completed"
+            enqueue_billing_job(appointment.id)
+
         trigger_billing(appointment)
 
         return {
             "appointment_id": appointment.id,
-            "status": appointment.status
+            "status": appointment.status,
+            "message": "Appointment completed. Billing queued."
         }
-
-    except Exception as e:
-        session.rollback()
-        raise e
 
     finally:
         session.close()

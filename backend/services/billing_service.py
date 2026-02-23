@@ -1,36 +1,64 @@
 from models.invoice import Invoice
 from utils.db import get_db_session
 from datetime import datetime
+from sqlalchemy.exc import IntegrityError
 
 DEFAULT_CONSULTATION_FEE = 500.0
 TAX_PERCENTAGE = 0.18
 
 
-def create_invoice_for_appointment(appointment):
-    session = get_db_session()
+def create_invoice_for_appointment(session, appointment):
+    """
+    Creates invoice within existing DB transaction.
+    Must use the SAME session passed from caller.
+    No commit here (transaction handled by caller).
+    Idempotent and concurrency-safe (DB unique constraint enforced).
+    """
+
+    # Fast idempotency check
+    existing = (
+        session.query(Invoice)
+        .filter(Invoice.appointment_id == appointment.id)
+        .first()
+    )
+    if existing:
+        return existing
+
+    consultation_fee = DEFAULT_CONSULTATION_FEE
+    tax_amount = consultation_fee * TAX_PERCENTAGE
+    total_amount = consultation_fee + tax_amount
+
+    invoice = Invoice(
+        appointment_id=appointment.id,
+        patient_id=appointment.patient_id,
+        doctor_id=appointment.doctor_id,
+        consultation_fee=consultation_fee,
+        tax_amount=tax_amount,
+        total_amount=total_amount,
+        status="pending"
+    )
+
     try:
-        consultation_fee = DEFAULT_CONSULTATION_FEE
-        tax_amount = consultation_fee * TAX_PERCENTAGE
-        total_amount = consultation_fee + tax_amount
-
-        invoice = Invoice(
-            appointment_id=appointment.id,
-            patient_id=appointment.patient_id,
-            doctor_id=appointment.doctor_id,
-            consultation_fee=consultation_fee,
-            tax_amount=tax_amount,
-            total_amount=total_amount,
-            status="pending"
-        )
-
-        session.add(invoice)
-        session.commit()
-        session.refresh(invoice)
-
+        # Use SAVEPOINT so we don't break outer transaction
+        with session.begin_nested():
+            session.add(invoice)
+            session.flush()
         return invoice
 
-    finally:
-        session.close()
+    except IntegrityError:
+        # Another transaction already created invoice
+        session.expire_all()
+
+        existing = (
+            session.query(Invoice)
+            .filter(Invoice.appointment_id == appointment.id)
+            .first()
+        )
+
+        if not existing:
+            raise
+
+        return existing
 
 
 def pay_invoice(invoice_id):
