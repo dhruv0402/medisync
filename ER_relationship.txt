@@ -1,0 +1,46 @@
+RELATIONSHIP DOCUMENTATION: Healthcare Management System
+
+1.  Users to Patients (1:1)
+    - Type: One-to-One
+    - Detail: Each user account of role 'patient' corresponds to exactly one patient record.
+    - Constraint: patients.user_id (Unique FK) -> users.user_id
+
+2.  Users to Doctors (1:1)
+    - Type: One-to-One
+    - Detail: Each user account of role 'doctor' corresponds to exactly one doctor record.
+    - Constraint: doctors.user_id (Unique FK) -> users.user_id
+
+3.  Departments to Doctors (1:M)
+    - Type: One-to-Many
+    - Detail: A department can have multiple doctors; a doctor belongs to one department.
+    - Constraint: doctors.department_id (FK) -> departments.department_id
+
+4.  Doctors to Doctor_Schedules (1:M)
+    - Type: One-to-Many
+    - Detail: One doctor has multiple recurring weekly schedule entries.
+    - Constraint: doctor_schedules.doctor_id (FK) -> doctors.doctor_id
+
+5.  Doctors to Availability_Slots (1:M)
+    - Type: One-to-Many
+    - Detail: One doctor can have many specific date/time availability slots.
+    - Constraint: availability_slots.doctor_id (FK) -> doctors.doctor_id
+
+6.  Patients to Appointments (1:M)
+    - Type: One-to-Many
+    - Detail: One patient can book multiple appointments over time.
+    - Constraint: appointments.patient_id (FK) -> patients.patient_id
+
+7.  Doctors to Appointments (1:M)
+    - Type: One-to-Many
+    - Detail: One doctor can be assigned to multiple appointments.
+    - Constraint: appointments.doctor_id (FK) -> doctors.doctor_id
+
+8.  Availability_Slots to Appointments (1:1)
+    - Type: One-to-One
+    - Detail: An appointment occupies exactly one slot, and a slot can be linked to only one appointment.
+    - Constraint: appointments.slot_id (Unique FK) -> availability_slots.slot_id
+
+9.  Appointments to Invoices (1:1)
+    - Type: One-to-One
+    - Detail: Each appointment generates exactly one invoice.
+    - Constraint: invoices.appointment_id (Unique FK) -> appointments.appointment_id
