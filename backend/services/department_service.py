@@ -45,23 +45,19 @@ def create_department_service(name, description):
 # -----------------------------------------
 # Get All Departments
 # -----------------------------------------
+from services.db_service import fetch_all
+
 def get_all_departments_service():
-    session = get_db_session()
-    try:
-        departments = session.query(Department).all()
+    departments = fetch_all(Department)
 
-        return [
-            {
-                "id": dept.id,
-                "name": dept.name,
-                "description": dept.description
-            }
-            for dept in departments
-        ]
-
-    finally:
-        session.close()
-
+    return [
+        {
+            "id": dept.id,
+            "name": dept.name,
+            "description": dept.description
+        }
+        for dept in departments
+    ]
 
 # -----------------------------------------
 # Get Department by ID
