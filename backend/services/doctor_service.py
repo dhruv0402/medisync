@@ -47,25 +47,20 @@ def create_doctor_service(name, specialization, department_id):
 # ---------------------------------------
 # Get All Doctors
 # ---------------------------------------
+from services.db_service import fetch_all
+
 def get_all_doctors_service():
-    session = get_db_session()
+    doctors = fetch_all(Doctor)
 
-    try:
-        doctors = session.query(Doctor).all()
-
-        return [
-            {
-                "id": d.id,
-                "name": d.name,
-                "specialization": d.specialization,
-                "department_id": d.department_id
-            }
-            for d in doctors
-        ]
-
-    finally:
-        session.close()
-
+    return [
+        {
+            "id": d.id,
+            "name": d.name,
+            "specialization": d.specialization,
+            "department_id": d.department_id
+        }
+        for d in doctors
+    ]
 
 # ---------------------------------------
 # Get Doctors By Department
