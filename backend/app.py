@@ -8,6 +8,7 @@ from sqlalchemy import text
 from utils.db import engine
 from models.base import Base
 import logging
+
 # -------------------------------------
 # Load Environment Variables
 # -------------------------------------
@@ -17,8 +18,7 @@ load_dotenv()
 # Structured Logging Configuration
 # -------------------------------------
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 )
 
 logger = logging.getLogger(__name__)
@@ -47,8 +47,21 @@ def create_app():
     # -------------------------------------
     # Initialize Extensions
     # -------------------------------------
-    CORS(app)
+    CORS(
+        app,
+        resources={r"/api/*": {"origins": "http://localhost:3000"}},
+        supports_credentials=True,
+    )
+    app.config["JWT_COOKIE_CSRF_PROTECT"] = False
     jwt.init_app(app)
+
+    @app.after_request
+    def after_request(response):
+        response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
 
     # -------------------------------------
     # Register Blueprints
@@ -72,46 +85,45 @@ def create_app():
     app.register_blueprint(report_bp, url_prefix="/api/reports")
     app.register_blueprint(department_bp, url_prefix="/api/departments")
     app.register_blueprint(slot_bp, url_prefix="/api/slots")
-    app.register_blueprint(invoice_bp)
+    app.register_blueprint(invoice_bp, url_prefix="/api/invoices")
     app.register_blueprint(admin_bp)
+
     # -------------------------------------
     # Root Health Check
     # -------------------------------------
     @app.route("/", methods=["GET"])
     def root():
-        return jsonify({
-            "success": True,
-            "data": {
-                "status": "running",
-                "service": "MediSync API",
-                "environment": app.config["ENV"]
+        return jsonify(
+            {
+                "success": True,
+                "data": {
+                    "status": "running",
+                    "service": "MediSync API",
+                    "environment": app.config["ENV"],
+                },
             }
-        }), 200
+        ), 200
 
     # -------------------------------------
     # Dedicated Health Endpoint
     # -------------------------------------
-    
+
     @app.route("/health", methods=["GET"])
     def health():
         try:
             with engine.connect() as connection:
                 connection.execute(text("SELECT 1"))
 
-            return jsonify({
-                "success": True,
-                "data": {
-                    "status": "healthy",
-                    "database": "connected"
+            return jsonify(
+                {
+                    "success": True,
+                    "data": {"status": "healthy", "database": "connected"},
                 }
-            }), 200
+            ), 200
 
         except Exception as e:
             logger.exception("Health check failed")
-            return jsonify({
-                "success": False,
-                "error": "Service unhealthy"
-            }), 500
+            return jsonify({"success": False, "error": "Service unhealthy"}), 500
 
     # -------------------------------------
     # 404 Handler (Important)
@@ -119,10 +131,7 @@ def create_app():
     @app.errorhandler(404)
     def not_found(e):
         logger.warning(f"404 - Route not found: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": "Route Not Found"
-        }), 404
+        return jsonify({"success": False, "error": "Route Not Found"}), 404
 
     # -------------------------------------
     # Global Error Handler
@@ -130,27 +139,19 @@ def create_app():
     @app.errorhandler(ValueError)
     def handle_value_error(e):
         logger.warning(f"Client error: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
+        return jsonify({"success": False, "error": str(e)}), 400
 
     @app.errorhandler(SQLAlchemyError)
     def handle_db_error(e):
         logger.exception("Database error occurred")
-        return jsonify({
-            "success": False,
-            "error": "Database error"
-        }), 500
+        return jsonify({"success": False, "error": "Database error"}), 500
 
     @app.errorhandler(Exception)
     def handle_exception(e):
         import traceback
+
         traceback.print_exc()
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        return jsonify({"success": False, "error": str(e)}), 500
 
     return app
 

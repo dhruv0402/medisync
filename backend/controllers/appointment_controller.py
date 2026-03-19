@@ -8,7 +8,7 @@ from services.appointment_service import (
     book_appointment_service,
     cancel_appointment_service,
     get_patient_appointments_service,
-    complete_appointment_service
+    complete_appointment_service,
 )
 
 appointment_bp = Blueprint("appointment", __name__)
@@ -19,7 +19,6 @@ appointment_bp = Blueprint("appointment", __name__)
 # GET /api/appointments/doctors?department_id=1
 # -------------------------------------------------
 @appointment_bp.route("/doctors", methods=["GET"])
-@jwt_required()
 def fetch_doctors_by_department():
     try:
         department_id = request.args.get("department_id", type=int)
@@ -29,15 +28,13 @@ def fetch_doctors_by_department():
 
         doctors = get_doctors_by_department(department_id)
 
-        return jsonify({
-            "department_id": department_id,
-            "doctors": doctors
-        }), 200
+        return jsonify({"department_id": department_id, "doctors": doctors}), 200
 
     except ValueError as ve:
         return jsonify({"error": str(ve)}), 400
     except Exception as e:
-        return jsonify({"error": "Internal server error"}), 500
+        print("FETCH DOCTORS ERROR:", str(e))
+        return jsonify({"error": str(e)}), 500
 
 
 # -------------------------------------------------
@@ -45,7 +42,6 @@ def fetch_doctors_by_department():
 # GET /api/appointments/slots?doctor_id=1&date=2026-02-20
 # -------------------------------------------------
 @appointment_bp.route("/slots", methods=["GET"])
-@jwt_required()
 def fetch_available_slots():
     try:
         doctor_id = request.args.get("doctor_id", type=int)
@@ -61,16 +57,15 @@ def fetch_available_slots():
 
         slots = get_available_slots(doctor_id, date)
 
-        return jsonify({
-            "doctor_id": doctor_id,
-            "date": date_str,
-            "available_slots": slots
-        }), 200
+        return jsonify(
+            {"doctor_id": doctor_id, "date": date_str, "available_slots": slots}
+        ), 200
 
     except ValueError as ve:
         return jsonify({"error": str(ve)}), 400
-    except Exception:
-        return jsonify({"error": "Internal server error"}), 500
+    except Exception as e:
+        print("FETCH SLOTS ERROR:", str(e))
+        return jsonify({"error": str(e)}), 500
 
 
 # -------------------------------------------------
@@ -112,13 +107,12 @@ def book_appointment():
             patient_id=patient_id,
             doctor_id=int(doctor_id),
             slot_id=int(slot_id),
-            appointment_date=appointment_date
+            appointment_date=appointment_date,
         )
 
-        return jsonify({
-            "message": "Appointment booked successfully",
-            "appointment": result
-        }), 201
+        return jsonify(
+            {"message": "Appointment booked successfully", "appointment": result}
+        ), 201
 
     except ValueError as ve:
         return jsonify({"error": str(ve)}), 400
@@ -144,8 +138,7 @@ def cancel_appointment(appointment_id):
             return jsonify({"error": "Only patients can cancel appointments"}), 403
 
         result = cancel_appointment_service(
-            appointment_id=appointment_id,
-            patient_id=patient_id
+            appointment_id=appointment_id, patient_id=patient_id
         )
 
         return jsonify(result), 200
@@ -169,11 +162,11 @@ def complete_appointment(appointment_id):
         role = claims.get("role")
 
         if role not in {"admin", "doctor"}:
-            return jsonify({"error": "Only admin or doctor can complete appointments"}), 403
+            return jsonify(
+                {"error": "Only admin or doctor can complete appointments"}
+            ), 403
 
-        result = complete_appointment_service(
-            appointment_id=appointment_id
-        )
+        result = complete_appointment_service(appointment_id=appointment_id)
 
         return jsonify(result), 200
 
@@ -187,6 +180,7 @@ def complete_appointment(appointment_id):
 # Get My Appointments
 # GET /api/appointments/my?status=scheduled
 # -------------------------------------------------
+@appointment_bp.route("", methods=["GET"])
 @appointment_bp.route("/my", methods=["GET"])
 @jwt_required()
 def get_my_appointments():
@@ -206,14 +200,10 @@ def get_my_appointments():
             return jsonify({"error": "Invalid status filter"}), 400
 
         appointments = get_patient_appointments_service(
-            patient_id=patient_id,
-            status=status
+            patient_id=patient_id, status=status
         )
 
-        return jsonify({
-            "count": len(appointments),
-            "appointments": appointments
-        }), 200
+        return jsonify({"count": len(appointments), "appointments": appointments}), 200
 
     except ValueError as ve:
         return jsonify({"error": str(ve)}), 400

@@ -3,10 +3,7 @@ from flask_jwt_extended import create_access_token
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import timedelta
 
-from services.auth_service import (
-    create_user,
-    get_user_by_email
-)
+from services.auth_service import create_user, get_user_by_email
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -35,17 +32,16 @@ def register():
         hashed_password = generate_password_hash(password)
 
         new_user = create_user(
-            name=name,
-            email=email,
-            password=hashed_password,
-            role=role
+            name=name, email=email, password=hashed_password, role=role
         )
 
-        return jsonify({
-            "message": "User registered successfully",
-            "user_id": new_user.id,
-            "role": new_user.role
-        }), 201
+        return jsonify(
+            {
+                "message": "User registered successfully",
+                "user_id": new_user.id,
+                "role": new_user.role,
+            }
+        ), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -54,10 +50,13 @@ def register():
 # ----------------------------------------
 # Login Endpoint
 # ----------------------------------------
-@auth_bp.route("/login", methods=["POST"])
+@auth_bp.route("/login", methods=["POST", "OPTIONS"])
 def login():
     try:
-        data = request.get_json()
+        if request.method == "OPTIONS":
+            return jsonify({"message": "OK"}), 200
+
+        data = request.get_json(silent=True) or {}
 
         email = data.get("email")
         password = data.get("password")
@@ -75,21 +74,23 @@ def login():
 
         # Create JWT token
         access_token = create_access_token(
-    identity=str(user.id),
-    additional_claims={"role": user.role},
-    expires_delta=timedelta(hours=2)
-)
+            identity=str(user.id),
+            additional_claims={"role": user.role},
+            expires_delta=timedelta(hours=2),
+        )
 
-        return jsonify({
-            "message": "Login successful",
-            "access_token": access_token,
-            "user": {
-                "id": user.id,
-                "name": user.name,
-                "email": user.email,
-                "role": user.role
+        return jsonify(
+            {
+                "message": "Login successful",
+                "access_token": access_token,
+                "user": {
+                    "id": user.id,
+                    "name": user.name,
+                    "email": user.email,
+                    "role": user.role,
+                },
             }
-        }), 200
+        ), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
