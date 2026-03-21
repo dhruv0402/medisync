@@ -1,6 +1,6 @@
 from sqlalchemy.exc import SQLAlchemyError
-from models.user import User
-from utils.db import get_db_session
+from backend.models.user import User
+from backend.utils.db import get_db_session
 
 
 # ----------------------------------------
@@ -9,12 +9,7 @@ from utils.db import get_db_session
 def create_user(name, email, password, role):
     session = get_db_session()
     try:
-        new_user = User(
-            name=name,
-            email=email,
-            password=password,
-            role=role
-        )
+        new_user = User(name=name, email=email, password=password, role=role)
 
         session.add(new_user)
         session.commit()

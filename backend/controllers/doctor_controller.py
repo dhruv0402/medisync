@@ -1,14 +1,14 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt
 
-from services.doctor_service import (
+from backend.services.doctor_service import (
     create_doctor_service,
     get_all_doctors_service,
     get_doctors_by_department_service,
-    get_doctor_by_id_service
+    get_doctor_by_id_service,
 )
 
-doctor_bp = Blueprint("doctor", __name__)
+doctor_bp = Blueprint("doctor", __name__, url_prefix="/api/doctors")
 
 
 # ---------------------------------------
@@ -33,16 +33,11 @@ def create_doctor():
         if not all([name, specialization, department_id]):
             return jsonify({"error": "Missing required fields"}), 400
 
-        result = create_doctor_service(
-            name,
-            specialization,
-            department_id
-        )
+        result = create_doctor_service(name, specialization, department_id)
 
-        return jsonify({
-            "message": "Doctor created successfully",
-            "doctor": result
-        }), 201
+        return jsonify(
+            {"message": "Doctor created successfully", "doctor": result}
+        ), 201
 
     except ValueError as ve:
         return jsonify({"error": str(ve)}), 400
@@ -77,10 +72,7 @@ def get_doctors_by_department(department_id):
     try:
         doctors = get_doctors_by_department_service(department_id)
 
-        return jsonify({
-            "department_id": department_id,
-            "doctors": doctors
-        }), 200
+        return jsonify({"department_id": department_id, "doctors": doctors}), 200
 
     except Exception:
         return jsonify({"error": "Internal server error"}), 500

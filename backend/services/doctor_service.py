@@ -1,7 +1,7 @@
 from sqlalchemy.exc import SQLAlchemyError
-from models.doctor import Doctor
-from models.department import Department
-from utils.db import get_db_session
+from backend.models.doctor import Doctor
+from backend.models.department import Department
+from backend.utils.db import get_db_session
 
 
 # ---------------------------------------
@@ -12,17 +12,15 @@ def create_doctor_service(name, specialization, department_id):
 
     try:
         # Validate department exists
-        department = session.query(Department).filter(
-            Department.id == department_id
-        ).first()
+        department = (
+            session.query(Department).filter(Department.id == department_id).first()
+        )
 
         if not department:
             raise ValueError("Department not found")
 
         doctor = Doctor(
-            name=name,
-            specialization=specialization,
-            department_id=department_id
+            name=name, specialization=specialization, department_id=department_id
         )
 
         session.add(doctor)
@@ -33,7 +31,7 @@ def create_doctor_service(name, specialization, department_id):
             "id": doctor.id,
             "name": doctor.name,
             "specialization": doctor.specialization,
-            "department_id": doctor.department_id
+            "department_id": doctor.department_id,
         }
 
     except SQLAlchemyError:
@@ -47,7 +45,8 @@ def create_doctor_service(name, specialization, department_id):
 # ---------------------------------------
 # Get All Doctors
 # ---------------------------------------
-from services.db_service import fetch_all
+from backend.services.db_service import fetch_all
+
 
 def get_all_doctors_service():
     doctors = fetch_all(Doctor)
@@ -57,10 +56,11 @@ def get_all_doctors_service():
             "id": d.id,
             "name": d.name,
             "specialization": d.specialization,
-            "department_id": d.department_id
+            "department_id": d.department_id,
         }
         for d in doctors
     ]
+
 
 # ---------------------------------------
 # Get Doctors By Department
@@ -69,16 +69,12 @@ def get_doctors_by_department_service(department_id):
     session = get_db_session()
 
     try:
-        doctors = session.query(Doctor).filter(
-            Doctor.department_id == department_id
-        ).all()
+        doctors = (
+            session.query(Doctor).filter(Doctor.department_id == department_id).all()
+        )
 
         return [
-            {
-                "id": d.id,
-                "name": d.name,
-                "specialization": d.specialization
-            }
+            {"id": d.id, "name": d.name, "specialization": d.specialization}
             for d in doctors
         ]
 
@@ -93,9 +89,7 @@ def get_doctor_by_id_service(doctor_id):
     session = get_db_session()
 
     try:
-        doctor = session.query(Doctor).filter(
-            Doctor.id == doctor_id
-        ).first()
+        doctor = session.query(Doctor).filter(Doctor.id == doctor_id).first()
 
         if not doctor:
             raise ValueError("Doctor not found")
@@ -104,7 +98,7 @@ def get_doctor_by_id_service(doctor_id):
             "id": doctor.id,
             "name": doctor.name,
             "specialization": doctor.specialization,
-            "department_id": doctor.department_id
+            "department_id": doctor.department_id,
         }
 
     finally:

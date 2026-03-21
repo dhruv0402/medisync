@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from datetime import datetime
 
-from services.appointment_service import (
+from backend.services.appointment_service import (
     get_doctors_by_department,
     get_available_slots,
     book_appointment_service,
@@ -11,7 +11,7 @@ from services.appointment_service import (
     complete_appointment_service,
 )
 
-appointment_bp = Blueprint("appointment", __name__)
+appointment_bp = Blueprint("appointment", __name__, url_prefix="/api/appointments")
 
 
 # -------------------------------------------------
@@ -91,23 +91,14 @@ def book_appointment():
 
         doctor_id = data.get("doctor_id", None)
         slot_id = data.get("slot_id", None)
-        appointment_date_str = data.get("appointment_date", None)
 
-        if doctor_id is None or slot_id is None or not appointment_date_str:
+        if doctor_id is None or slot_id is None:
             return jsonify({"error": "Missing required fields"}), 400
-
-        try:
-            appointment_date = datetime.strptime(
-                appointment_date_str, "%Y-%m-%d"
-            ).date()
-        except ValueError:
-            return jsonify({"error": "Invalid date format (YYYY-MM-DD required)"}), 400
 
         result = book_appointment_service(
             patient_id=patient_id,
             doctor_id=int(doctor_id),
             slot_id=int(slot_id),
-            appointment_date=appointment_date,
         )
 
         return jsonify(
@@ -118,8 +109,10 @@ def book_appointment():
         return jsonify({"error": str(ve)}), 400
 
     except Exception as e:
-        print("BOOK APPOINTMENT ERROR:", str(e))
-        raise e
+        import traceback
+
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 # -------------------------------------------------
@@ -178,7 +171,7 @@ def complete_appointment(appointment_id):
 
 # -------------------------------------------------
 # Get My Appointments
-# GET /api/appointments/my?status=scheduled
+# GET /api/appointments/my?status=booked
 # -------------------------------------------------
 @appointment_bp.route("", methods=["GET"])
 @appointment_bp.route("/my", methods=["GET"])
@@ -195,7 +188,7 @@ def get_my_appointments():
         status = request.args.get("status")
 
         # Optional: validate allowed statuses
-        allowed_statuses = {"scheduled", "cancelled", "completed"}
+        allowed_statuses = {"booked", "cancelled", "completed"}
         if status and status not in allowed_statuses:
             return jsonify({"error": "Invalid status filter"}), 400
 
@@ -207,5 +200,8 @@ def get_my_appointments():
 
     except ValueError as ve:
         return jsonify({"error": str(ve)}), 400
-    except Exception:
-        return jsonify({"error": "Internal server error"}), 500
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500

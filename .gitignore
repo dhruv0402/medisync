@@ -1,4 +1,6 @@
+# -----------------------------
 # Python
+# -----------------------------
 __pycache__/
 *.pyc
 *.pyo
@@ -9,11 +11,18 @@ __pycache__/
 venv/
 backend/venv/
 
-# Environment files
+# Environment variables
 .env
 
-# VSCode
-.vscode/
+# -----------------------------
+# Node / Next.js
+# -----------------------------
+node_modules/
+.next/
+dist/
 
-# Mac
+# -----------------------------
+# Editor / OS
+# -----------------------------
+.vscode/
 .DS_Store

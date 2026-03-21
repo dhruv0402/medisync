@@ -1,8 +1,8 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from services.billing_service import pay_invoice
-from utils.db import get_db_session
-from models.invoice import Invoice
+from backend.services.billing_service import pay_invoice
+from backend.utils.db import get_db_session
+from backend.models.invoice import Invoice
 
 
 invoice_bp = Blueprint("invoice", __name__, url_prefix="/api/invoices")
@@ -80,8 +80,8 @@ def get_invoice(invoice_id):
 @jwt_required()
 def get_my_invoices():
     from flask_jwt_extended import get_jwt_identity, get_jwt
-    from models.invoice import Invoice
-    from utils.db import get_db_session
+    from backend.models.invoice import Invoice
+    from backend.utils.db import get_db_session
 
     session = get_db_session()
     try:

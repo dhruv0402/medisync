@@ -1,13 +1,13 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 
-from services.department_service import (
+from backend.services.department_service import (
     create_department_service,
     get_all_departments_service,
-    get_department_by_id_service
+    get_department_by_id_service,
 )
 
-department_bp = Blueprint("department", __name__)
+department_bp = Blueprint("department", __name__, url_prefix="/api/departments")
 
 
 # -----------------------------------------
@@ -23,10 +23,12 @@ def create_department():
 
         # Strict admin check
         if claims.get("role") != "admin":
-            return jsonify({
-                "error": "Access denied",
-                "message": "Only admin users can create departments"
-            }), 403
+            return jsonify(
+                {
+                    "error": "Access denied",
+                    "message": "Only admin users can create departments",
+                }
+            ), 403
 
         data = request.get_json()
 
@@ -41,20 +43,19 @@ def create_department():
 
         result = create_department_service(name.strip(), description)
 
-        return jsonify({
-            "message": "Department created successfully",
-            "created_by": user_id,
-            "department": result
-        }), 201
+        return jsonify(
+            {
+                "message": "Department created successfully",
+                "created_by": user_id,
+                "department": result,
+            }
+        ), 201
 
     except ValueError as ve:
         return jsonify({"error": str(ve)}), 400
 
     except Exception as e:
-        return jsonify({
-            "error": "Internal server error",
-            "message": str(e)
-        }), 500
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 
 # -----------------------------------------
@@ -67,16 +68,10 @@ def get_departments():
     try:
         departments = get_all_departments_service()
 
-        return jsonify({
-            "count": len(departments),
-            "departments": departments
-        }), 200
+        return jsonify({"count": len(departments), "departments": departments}), 200
 
     except Exception as e:
-        return jsonify({
-            "error": "Internal server error",
-            "message": str(e)
-        }), 500
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 
 # -----------------------------------------
@@ -95,7 +90,4 @@ def get_department(department_id):
         return jsonify({"error": str(ve)}), 404
 
     except Exception as e:
-        return jsonify({
-            "error": "Internal server error",
-            "message": str(e)
-        }), 500
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500

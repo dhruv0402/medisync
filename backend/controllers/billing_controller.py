@@ -1,10 +1,10 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from services.billing_service import pay_invoice
-from utils.db import get_db_session
-from models.invoice import Invoice
+from backend.services.billing_service import pay_invoice
+from backend.utils.db import get_db_session
+from backend.models.invoice import Invoice
 
-billing_bp = Blueprint("billing", __name__)
+billing_bp = Blueprint("billing", __name__, url_prefix="/api/billing")
 
 
 # ---------------------------------------------
@@ -18,22 +18,27 @@ def get_my_invoices():
     try:
         patient_id = int(get_jwt_identity())
 
-        invoices = session.query(Invoice).filter(
-            Invoice.patient_id == patient_id
-        ).order_by(Invoice.created_at.desc()).all()
+        invoices = (
+            session.query(Invoice)
+            .filter(Invoice.patient_id == patient_id)
+            .order_by(Invoice.created_at.desc())
+            .all()
+        )
 
-        return jsonify({
-            "count": len(invoices),
-            "invoices": [
-                {
-                    "invoice_id": inv.id,
-                    "appointment_id": inv.appointment_id,
-                    "total_amount": inv.total_amount,
-                    "status": inv.status
-                }
-                for inv in invoices
-            ]
-        }), 200
+        return jsonify(
+            {
+                "count": len(invoices),
+                "invoices": [
+                    {
+                        "invoice_id": inv.id,
+                        "appointment_id": inv.appointment_id,
+                        "total_amount": inv.total_amount,
+                        "status": inv.status,
+                    }
+                    for inv in invoices
+                ],
+            }
+        ), 200
 
     finally:
         session.close()

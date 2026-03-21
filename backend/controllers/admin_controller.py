@@ -1,8 +1,8 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from services.admin_service import get_dashboard_metrics
-from models.user import User
-from utils.db import get_db_session
+from backend.services.admin_service import get_dashboard_metrics
+from backend.models.user import User
+from backend.utils.db import get_db_session
 
 admin_bp = Blueprint("admin", __name__, url_prefix="/api/admin")
 

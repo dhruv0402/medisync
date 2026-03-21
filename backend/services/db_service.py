@@ -1,4 +1,4 @@
-from utils.db import get_db_session
+from backend.utils.db import get_db_session
 from sqlalchemy.exc import SQLAlchemyError
 
 

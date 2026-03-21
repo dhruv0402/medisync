@@ -24,8 +24,7 @@ DB_NAME = os.getenv("DB_NAME")
 
 if not all([DB_USER, DB_PASSWORD, DB_NAME]):
     raise RuntimeError(
-        "Database environment variables are not set properly. "
-        "Check backend/.env file."
+        "Database environment variables are not set properly. Check backend/.env file."
     )
 
 # Safely encode password (important if it contains special characters)
@@ -38,8 +37,11 @@ DATABASE_URL = (
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
+    pool_size=10,
+    max_overflow=20,
+    pool_recycle=1800,
     future=True,
-    echo=os.getenv("SQL_ECHO", "False") == "True"
+    echo=os.getenv("SQL_ECHO", "False") == "True",
 )
 
 # Optional: Test DB connection immediately on startup
@@ -50,11 +52,8 @@ try:
 except Exception as e:
     raise RuntimeError(f"❌ Database connection failed: {str(e)}")
 
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def get_db_session():
     return SessionLocal()

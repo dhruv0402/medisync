@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = "http://localhost:5001/api";
+const API_BASE_URL = "http://127.0.0.1:5000/api";
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -56,7 +56,7 @@ export const appointmentAPI = {
   bookAppointment: (data: any) =>
     apiClient.post("/appointments/book", data),
   getMyAppointments: () =>
-    apiClient.get("/appointments"),
+    apiClient.get("/appointments/my"),
   cancelAppointment: (appointmentId: number) =>
     apiClient.delete(`/appointments/${appointmentId}`),
   completeAppointment: (appointmentId: number) =>
@@ -66,7 +66,7 @@ export const appointmentAPI = {
 // Invoice APIs
 export const invoiceAPI = {
   getInvoices: () =>
-    apiClient.get("/invoices"),
+    apiClient.get("/invoices/my"),
   payInvoice: (invoiceId: string) =>
     apiClient.post(`/invoices/pay/${invoiceId}`, {}),
 };
@@ -77,8 +77,8 @@ export const adminAPI = {
     apiClient.get("/admin/dashboard"),
 };
 
-// Health check
+// Health check (optional: only if route exists)
 export const healthCheck = () =>
-  apiClient.get("/health");
+  apiClient.get("/");
 
 export default apiClient;

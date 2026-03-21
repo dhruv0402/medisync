@@ -58,16 +58,16 @@ def create_app():
     # -------------------------------------
     # Register Blueprints
     # -------------------------------------
-    from backend.controllers.auth_controller import auth_bp
-    from backend.controllers.appointment_controller import appointment_bp
-    from backend.controllers.billing_controller import billing_bp
-    from backend.controllers.doctor_controller import doctor_bp
-    from backend.controllers.patient_controller import patient_bp
-    from backend.controllers.report_controller import report_bp
-    from backend.controllers.department_controller import department_bp
-    from backend.controllers.availability_slot_controller import slot_bp
-    from backend.controllers.invoice_controller import invoice_bp
-    from backend.controllers.admin_controller import admin_bp
+    from controllers.auth_controller import auth_bp
+    from controllers.appointment_controller import appointment_bp
+    from controllers.billing_controller import billing_bp
+    from controllers.doctor_controller import doctor_bp
+    from controllers.patient_controller import patient_bp
+    from controllers.report_controller import report_bp
+    from controllers.department_controller import department_bp
+    from controllers.availability_slot_controller import slot_bp
+    from controllers.invoice_controller import invoice_bp
+    from controllers.admin_controller import admin_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(appointment_bp, url_prefix="/api/appointments")

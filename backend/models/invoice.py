@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float
 from sqlalchemy.orm import relationship
-from models.base import Base
+from backend.models.base import Base
 from datetime import datetime
 
 
@@ -17,7 +17,7 @@ class Invoice(Base):
     tax_amount = Column(Float, default=0.0)
     total_amount = Column(Float, nullable=False)
 
-    status = Column(String(20), default="pending")  
+    status = Column(String(20), default="pending")
     # pending, paid, failed, refunded
 
     created_at = Column(DateTime, default=datetime.utcnow)

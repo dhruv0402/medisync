@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, Time, ForeignKey
 from sqlalchemy.orm import relationship
-from models.base import Base
+from backend.models.base import Base
+
 
 class DoctorSchedule(Base):
     __tablename__ = "doctor_schedules"

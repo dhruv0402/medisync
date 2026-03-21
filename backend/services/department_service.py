@@ -1,6 +1,6 @@
 from sqlalchemy.exc import SQLAlchemyError
-from models.department import Department
-from utils.db import get_db_session
+from backend.models.department import Department
+from backend.utils.db import get_db_session
 
 
 # -----------------------------------------
@@ -11,18 +11,11 @@ def create_department_service(name, description):
     # Normalize input
     name = name.strip()
     try:
-        existing = (
-            session.query(Department)
-            .filter(Department.name.ilike(name))
-            .first()
-        )
+        existing = session.query(Department).filter(Department.name.ilike(name)).first()
         if existing:
             raise ValueError(f"Department '{existing.name}' already exists")
 
-        department = Department(
-            name=name,
-            description=description
-        )
+        department = Department(name=name, description=description)
 
         session.add(department)
         session.commit()
@@ -31,7 +24,7 @@ def create_department_service(name, description):
         return {
             "id": department.id,
             "name": department.name,
-            "description": department.description
+            "description": department.description,
         }
 
     except SQLAlchemyError:
@@ -45,19 +38,17 @@ def create_department_service(name, description):
 # -----------------------------------------
 # Get All Departments
 # -----------------------------------------
-from services.db_service import fetch_all
+from backend.services.db_service import fetch_all
+
 
 def get_all_departments_service():
     departments = fetch_all(Department)
 
     return [
-        {
-            "id": dept.id,
-            "name": dept.name,
-            "description": dept.description
-        }
+        {"id": dept.id, "name": dept.name, "description": dept.description}
         for dept in departments
     ]
+
 
 # -----------------------------------------
 # Get Department by ID
@@ -70,11 +61,7 @@ def get_department_by_id_service(department_id):
         if not dept:
             raise ValueError("Department not found")
 
-        return {
-            "id": dept.id,
-            "name": dept.name,
-            "description": dept.description
-        }
+        return {"id": dept.id, "name": dept.name, "description": dept.description}
 
     finally:
         session.close()

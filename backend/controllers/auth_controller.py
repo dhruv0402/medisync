@@ -3,9 +3,9 @@ from flask_jwt_extended import create_access_token
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import timedelta
 
-from services.auth_service import create_user, get_user_by_email
+from backend.services.auth_service import create_user, get_user_by_email
 
-auth_bp = Blueprint("auth", __name__)
+auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 
 # ----------------------------------------
@@ -14,7 +14,10 @@ auth_bp = Blueprint("auth", __name__)
 @auth_bp.route("/register", methods=["POST"])
 def register():
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
+
+        if not data:
+            return jsonify({"error": "Request body must be JSON"}), 400
 
         name = data.get("name")
         email = data.get("email")

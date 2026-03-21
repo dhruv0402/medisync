@@ -1,5 +1,5 @@
-from models.invoice import Invoice
-from utils.db import get_db_session
+from backend.models.invoice import Invoice
+from backend.utils.db import get_db_session
 from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 
@@ -17,9 +17,7 @@ def create_invoice_for_appointment(session, appointment):
 
     # Fast idempotency check
     existing = (
-        session.query(Invoice)
-        .filter(Invoice.appointment_id == appointment.id)
-        .first()
+        session.query(Invoice).filter(Invoice.appointment_id == appointment.id).first()
     )
     if existing:
         return existing
@@ -35,7 +33,7 @@ def create_invoice_for_appointment(session, appointment):
         consultation_fee=consultation_fee,
         tax_amount=tax_amount,
         total_amount=total_amount,
-        status="pending"
+        status="pending",
     )
 
     try:
@@ -85,7 +83,7 @@ def pay_invoice(invoice_id):
         return {
             "invoice_id": invoice.id,
             "status": invoice.status,
-            "paid_at": invoice.paid_at
+            "paid_at": invoice.paid_at,
         }
 
     finally:

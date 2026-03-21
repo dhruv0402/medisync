@@ -1,9 +1,9 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import and_
 from datetime import datetime, timedelta
-from models.availability_slot import AvailabilitySlot
-from models.doctor import Doctor
-from utils.db import get_db_session
+from backend.models.availability_slot import AvailabilitySlot
+from backend.models.doctor import Doctor
+from backend.utils.db import get_db_session
 
 
 # -----------------------------------------
@@ -26,14 +26,18 @@ def create_slot_service(doctor_id, date, start_time, end_time):
         if not doctor:
             raise ValueError("Doctor not found")
 
-        overlap = session.query(AvailabilitySlot).filter(
-            AvailabilitySlot.doctor_id == doctor_id,
-            AvailabilitySlot.date == date_obj,
-            and_(
-                AvailabilitySlot.start_time < end_obj,
-                AvailabilitySlot.end_time > start_obj
+        overlap = (
+            session.query(AvailabilitySlot)
+            .filter(
+                AvailabilitySlot.doctor_id == doctor_id,
+                AvailabilitySlot.date == date_obj,
+                and_(
+                    AvailabilitySlot.start_time < end_obj,
+                    AvailabilitySlot.end_time > start_obj,
+                ),
             )
-        ).first()
+            .first()
+        )
 
         if overlap:
             raise ValueError("Slot overlaps with existing slot")
@@ -43,7 +47,7 @@ def create_slot_service(doctor_id, date, start_time, end_time):
             date=date_obj,
             start_time=start_obj,
             end_time=end_obj,
-            is_booked=False
+            is_booked=False,
         )
 
         session.add(new_slot)
@@ -56,7 +60,7 @@ def create_slot_service(doctor_id, date, start_time, end_time):
             "date": str(date_obj),
             "start_time": str(start_obj),
             "end_time": str(end_obj),
-            "is_booked": False
+            "is_booked": False,
         }
 
     except SQLAlchemyError:
@@ -70,11 +74,7 @@ def create_slot_service(doctor_id, date, start_time, end_time):
 # Bulk Slot Creation (Auto Interval Generator)
 # -----------------------------------------
 def create_bulk_slots_service(
-    doctor_id,
-    date,
-    start_time,
-    end_time,
-    slot_duration_minutes
+    doctor_id, date, start_time, end_time, slot_duration_minutes
 ):
     session = get_db_session()
 
@@ -105,14 +105,18 @@ def create_bulk_slots_service(
             if next_time > end_datetime:
                 break
 
-            overlap = session.query(AvailabilitySlot).filter(
-                AvailabilitySlot.doctor_id == doctor_id,
-                AvailabilitySlot.date == date_obj,
-                and_(
-                    AvailabilitySlot.start_time < next_time.time(),
-                    AvailabilitySlot.end_time > current_time.time()
+            overlap = (
+                session.query(AvailabilitySlot)
+                .filter(
+                    AvailabilitySlot.doctor_id == doctor_id,
+                    AvailabilitySlot.date == date_obj,
+                    and_(
+                        AvailabilitySlot.start_time < next_time.time(),
+                        AvailabilitySlot.end_time > current_time.time(),
+                    ),
                 )
-            ).first()
+                .first()
+            )
 
             if not overlap:
                 slot = AvailabilitySlot(
@@ -120,14 +124,16 @@ def create_bulk_slots_service(
                     date=date_obj,
                     start_time=current_time.time(),
                     end_time=next_time.time(),
-                    is_booked=False
+                    is_booked=False,
                 )
                 session.add(slot)
 
-                created_slots.append({
-                    "start_time": str(current_time.time()),
-                    "end_time": str(next_time.time())
-                })
+                created_slots.append(
+                    {
+                        "start_time": str(current_time.time()),
+                        "end_time": str(next_time.time()),
+                    }
+                )
 
             current_time = next_time
 
@@ -136,7 +142,7 @@ def create_bulk_slots_service(
         return {
             "doctor_id": doctor_id,
             "date": str(date_obj),
-            "slots_created": created_slots
+            "slots_created": created_slots,
         }
 
     except SQLAlchemyError:
@@ -150,12 +156,7 @@ def create_bulk_slots_service(
 # Weekly Slot Generator
 # -----------------------------------------
 def create_weekly_slots_service(
-    doctor_id,
-    weekday,
-    number_of_weeks,
-    start_time,
-    end_time,
-    slot_duration_minutes
+    doctor_id, weekday, number_of_weeks, start_time, end_time, slot_duration_minutes
 ):
     """
     weekday: 0=Monday ... 6=Sunday
@@ -200,14 +201,18 @@ def create_weekly_slots_service(
                 if next_time > end_datetime:
                     break
 
-                overlap = session.query(AvailabilitySlot).filter(
-                    AvailabilitySlot.doctor_id == doctor_id,
-                    AvailabilitySlot.date == current_date,
-                    and_(
-                        AvailabilitySlot.start_time < next_time.time(),
-                        AvailabilitySlot.end_time > current_time.time()
+                overlap = (
+                    session.query(AvailabilitySlot)
+                    .filter(
+                        AvailabilitySlot.doctor_id == doctor_id,
+                        AvailabilitySlot.date == current_date,
+                        and_(
+                            AvailabilitySlot.start_time < next_time.time(),
+                            AvailabilitySlot.end_time > current_time.time(),
+                        ),
                     )
-                ).first()
+                    .first()
+                )
 
                 if not overlap:
                     slot = AvailabilitySlot(
@@ -215,7 +220,7 @@ def create_weekly_slots_service(
                         date=current_date,
                         start_time=current_time.time(),
                         end_time=next_time.time(),
-                        is_booked=False
+                        is_booked=False,
                     )
                     session.add(slot)
 
@@ -229,7 +234,7 @@ def create_weekly_slots_service(
             "doctor_id": doctor_id,
             "weekday": weekday,
             "weeks_created": number_of_weeks,
-            "dates_generated": created_summary
+            "dates_generated": created_summary,
         }
 
     except SQLAlchemyError:
