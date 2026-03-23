@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from backend.services.billing_service import pay_invoice
 from backend.utils.db import get_db_session
 from backend.models.invoice import Invoice
@@ -13,6 +13,10 @@ invoice_bp = Blueprint("invoice", __name__, url_prefix="/api/invoices")
 def get_all_invoices():
     session = get_db_session()
     try:
+        claims = get_jwt()
+        if claims.get("role") != "admin":
+            return jsonify({"error": "Only admin can view all invoices"}), 403
+
         invoices = session.query(Invoice).order_by(Invoice.created_at.desc()).all()
 
         return jsonify(
@@ -38,13 +42,28 @@ def get_all_invoices():
 @invoice_bp.route("/pay/<int:invoice_id>", methods=["PUT"])
 @jwt_required()
 def pay_invoice_endpoint(invoice_id):
+    session = get_db_session()
     try:
+        user_id = int(get_jwt_identity())
+        claims = get_jwt()
+
+        invoice = session.query(Invoice).filter(Invoice.id == invoice_id).first()
+
+        if not invoice:
+            return jsonify({"error": "Invoice not found"}), 404
+
+        if claims.get("role") != "admin" and invoice.patient_id != user_id:
+            return jsonify({"error": "Unauthorized"}), 403
+
         result = pay_invoice(invoice_id)
         return jsonify(result), 200
+
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception:
         return jsonify({"error": "Internal server error"}), 500
+    finally:
+        session.close()
 
 
 @invoice_bp.route("/<int:invoice_id>", methods=["GET"])
@@ -79,10 +98,6 @@ def get_invoice(invoice_id):
 @invoice_bp.route("/my", methods=["GET"])
 @jwt_required()
 def get_my_invoices():
-    from flask_jwt_extended import get_jwt_identity, get_jwt
-    from backend.models.invoice import Invoice
-    from backend.utils.db import get_db_session
-
     session = get_db_session()
     try:
         user_id = int(get_jwt_identity())

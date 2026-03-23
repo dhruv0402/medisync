@@ -24,6 +24,10 @@ def register():
         password = data.get("password")
         role = data.get("role")  # patient / doctor / admin
 
+        allowed_roles = {"patient", "doctor", "admin"}
+        if role not in allowed_roles:
+            return jsonify({"error": "Invalid role"}), 400
+
         if not all([name, email, password, role]):
             return jsonify({"error": "Missing required fields"}), 400
 
@@ -76,11 +80,21 @@ def login():
             return jsonify({"error": "Invalid credentials"}), 401
 
         # Create JWT token
+        additional_claims = {"role": user.role}
+
         access_token = create_access_token(
             identity=str(user.id),
-            additional_claims={"role": user.role},
+            additional_claims=additional_claims,
             expires_delta=timedelta(hours=2),
         )
+
+        # Determine redirect based on role
+        if user.role == "admin":
+            redirect = "/admin/dashboard"
+        elif user.role == "doctor":
+            redirect = "/doctor/dashboard"
+        else:
+            redirect = "/patient/home"
 
         return jsonify(
             {
@@ -92,6 +106,7 @@ def login():
                     "email": user.email,
                     "role": user.role,
                 },
+                "redirect": redirect,
             }
         ), 200
 

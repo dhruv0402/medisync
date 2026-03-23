@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from backend.services.billing_service import pay_invoice
+
+# payment handled via invoice_controller
 from backend.utils.db import get_db_session
 from backend.models.invoice import Invoice
 
@@ -42,17 +43,3 @@ def get_my_invoices():
 
     finally:
         session.close()
-
-
-# ---------------------------------------------
-# Pay Invoice
-# POST /api/billing/pay/<invoice_id>
-# ---------------------------------------------
-@billing_bp.route("/pay/<int:invoice_id>", methods=["POST"])
-@jwt_required()
-def pay(invoice_id):
-    try:
-        result = pay_invoice(invoice_id)
-        return jsonify(result), 200
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400

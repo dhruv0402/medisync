@@ -20,7 +20,9 @@ def create_doctor_service(name, specialization, department_id):
             raise ValueError("Department not found")
 
         doctor = Doctor(
-            name=name, specialization=specialization, department_id=department_id
+            user_id=name,  # TEMP: expecting caller to pass user_id instead of name
+            specialization=specialization,
+            department_id=department_id,
         )
 
         session.add(doctor)
@@ -29,7 +31,7 @@ def create_doctor_service(name, specialization, department_id):
 
         return {
             "id": doctor.id,
-            "name": doctor.name,
+            "name": doctor.user.name if doctor.user else None,
             "specialization": doctor.specialization,
             "department_id": doctor.department_id,
         }
@@ -45,21 +47,25 @@ def create_doctor_service(name, specialization, department_id):
 # ---------------------------------------
 # Get All Doctors
 # ---------------------------------------
-from backend.services.db_service import fetch_all
-
-
 def get_all_doctors_service():
-    doctors = fetch_all(Doctor)
+    session = get_db_session()
 
-    return [
-        {
-            "id": d.id,
-            "name": d.name,
-            "specialization": d.specialization,
-            "department_id": d.department_id,
-        }
-        for d in doctors
-    ]
+    try:
+        doctors = session.query(Doctor).all()
+        print("Fetched doctors:", doctors)
+
+        return [
+            {
+                "id": d.id,
+                "name": d.user.name if d.user else None,
+                "specialization": d.specialization,
+                "department_id": d.department_id,
+            }
+            for d in doctors
+        ]
+
+    finally:
+        session.close()
 
 
 # ---------------------------------------
@@ -74,7 +80,11 @@ def get_doctors_by_department_service(department_id):
         )
 
         return [
-            {"id": d.id, "name": d.name, "specialization": d.specialization}
+            {
+                "id": d.id,
+                "name": d.user.name if d.user else None,
+                "specialization": d.specialization,
+            }
             for d in doctors
         ]
 
@@ -96,7 +106,7 @@ def get_doctor_by_id_service(doctor_id):
 
         return {
             "id": doctor.id,
-            "name": doctor.name,
+            "name": doctor.user.name if doctor.user else None,
             "specialization": doctor.specialization,
             "department_id": doctor.department_id,
         }

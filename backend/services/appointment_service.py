@@ -164,6 +164,7 @@ def book_appointment_service(patient_id, doctor_id, slot_id):
         with session.begin():
             slot = (
                 session.query(AvailabilitySlot)
+                .options(joinedload(AvailabilitySlot.doctor))
                 .filter(
                     AvailabilitySlot.id == slot_id,
                     AvailabilitySlot.doctor_id == doctor_id,
@@ -215,9 +216,10 @@ def book_appointment_service(patient_id, doctor_id, slot_id):
 
             appointment_id = new_appointment.id
 
-        # enqueue billing AFTER transaction commit
-        enqueue_billing_job(appointment_id)
+            # enqueue billing AFTER transaction commit
+            # invoice creation handled by billing worker
 
+        enqueue_billing_job(appointment_id)
         return {"appointment_id": appointment_id, "status": "booked"}
 
     except IntegrityError:
@@ -281,7 +283,7 @@ def cancel_appointment_service(appointment_id, patient_id):
             if invoice:
                 if invoice.status == "paid":
                     invoice.status = "refunded"
-                    invoice.paid_at = datetime.utcnow()  # temporary reuse
+                    invoice.refunded_at = datetime.utcnow()  # temporary reuse
                 elif invoice.status == "pending":
                     invoice.status = "cancelled"
 

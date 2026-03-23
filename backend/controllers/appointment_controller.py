@@ -93,7 +93,7 @@ def book_appointment():
         slot_id = data.get("slot_id", None)
 
         if doctor_id is None or slot_id is None:
-            return jsonify({"error": "Missing required fields"}), 400
+            return jsonify({"error": "doctor_id and slot_id are required"}), 400
 
         result = book_appointment_service(
             patient_id=patient_id,

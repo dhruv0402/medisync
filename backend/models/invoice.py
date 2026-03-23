@@ -22,7 +22,7 @@ class Invoice(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     paid_at = Column(DateTime, nullable=True)
-
+    refunded_at = Column(DateTime, nullable=True)
     # Relationships
     appointment = relationship("Appointment")
     patient = relationship("User")

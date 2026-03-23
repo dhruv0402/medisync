@@ -8,7 +8,7 @@ class Doctor(Base):
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"))  # ✅ THIS WAS MISSING
-    department_id = Column(Integer, ForeignKey("departments.id"))
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=False)
 
     specialization = Column(String(100))
     consultation_fee = Column(Integer)
