@@ -1,6 +1,6 @@
 from backend.models.invoice import Invoice
 from backend.utils.db import get_db_session
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.exc import IntegrityError
 
 DEFAULT_CONSULTATION_FEE = 500.0
@@ -22,7 +22,10 @@ def create_invoice_for_appointment(session, appointment):
     if existing:
         return existing
 
-    consultation_fee = DEFAULT_CONSULTATION_FEE
+    consultation_fee = (
+        getattr(appointment.doctor, "consultation_fee", None)
+        or DEFAULT_CONSULTATION_FEE
+    )
     tax_amount = consultation_fee * TAX_PERCENTAGE
     total_amount = consultation_fee + tax_amount
 
@@ -75,8 +78,11 @@ def pay_invoice(invoice_id):
         if invoice.status == "paid":
             raise ValueError("Invoice already paid")
 
+        if invoice.status == "refunded":
+            raise ValueError("Cannot pay a refunded invoice")
+
         invoice.status = "paid"
-        invoice.paid_at = datetime.utcnow()
+        invoice.paid_at = datetime.now(timezone.utc)
 
         session.commit()
 
@@ -84,6 +90,38 @@ def pay_invoice(invoice_id):
             "invoice_id": invoice.id,
             "status": invoice.status,
             "paid_at": invoice.paid_at,
+        }
+
+    finally:
+        session.close()
+
+
+# Refund invoice function
+def refund_invoice(invoice_id):
+    session = get_db_session()
+    try:
+        invoice = (
+            session.query(Invoice)
+            .filter(Invoice.id == invoice_id)
+            .with_for_update()
+            .first()
+        )
+
+        if not invoice:
+            raise ValueError("Invoice not found")
+
+        if invoice.status != "paid":
+            raise ValueError("Only paid invoices can be refunded")
+
+        invoice.status = "refunded"
+        invoice.refunded_at = datetime.now(timezone.utc)
+
+        session.commit()
+
+        return {
+            "invoice_id": invoice.id,
+            "status": invoice.status,
+            "refunded_at": invoice.refunded_at,
         }
 
     finally:

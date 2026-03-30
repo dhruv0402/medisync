@@ -1,390 +1,68 @@
-from sqlalchemy.orm import joinedload
-from backend.models.doctor import Doctor
-from backend.models.user import User
-from backend.models.availability_slot import AvailabilitySlot
-from backend.models.appointment import Appointment
-from backend.models.doctor_schedule import DoctorSchedule
 from backend.utils.db import get_db_session
-from sqlalchemy import text
-from datetime import date as dt_date
-from datetime import datetime, timedelta
-from backend.services.billing_queue import enqueue_billing_job
-from backend.models.invoice import Invoice
-from sqlalchemy.exc import IntegrityError
-from backend.utils.redis_client import redis_client
-
-CANCELLATION_WINDOW_HOURS = 2
-LOCK_EXPIRY_SECONDS = 30
+from backend.models.appointment import Appointment
+from sqlalchemy.orm import joinedload
+from datetime import datetime, timezone
 
 
-# -------------------------------------------------
-# Utility: Billing Trigger Stub
-# -------------------------------------------------
-def trigger_billing(appointment):
-    """
-    Stub for billing integration.
-    Replace with actual payment gateway / invoice creation logic.
-    """
-    print(f"💰 Billing triggered for appointment {appointment.id}")
-
-
-# -------------------------------------------------
-# Get Doctors by Department
-# -------------------------------------------------
-def get_doctors_by_department(department_id):
-    session = get_db_session()
-    try:
-        if not isinstance(department_id, int):
-            raise ValueError("Invalid department_id")
-
-        doctors = (
-            session.query(Doctor, User)
-            .join(User, Doctor.user_id == User.id)
-            .filter(Doctor.department_id == department_id)
-            .all()
-        )
-
-        return [
-            {"id": d.id, "name": u.name, "specialization": d.specialization}
-            for d, u in doctors
-        ]
-
-    finally:
-        session.close()
-
-
-# -------------------------------------------------
-# Slot Generation
-# -------------------------------------------------
-def generate_slots_for_date(session, doctor_id, date):
-    day_of_week = date.weekday()
-
-    schedule = (
-        session.query(DoctorSchedule)
-        .filter(
-            DoctorSchedule.doctor_id == doctor_id,
-            DoctorSchedule.day_of_week == day_of_week,
-        )
-        .first()
-    )
-
-    if not schedule:
-        return
-
-    existing_count = (
-        session.query(AvailabilitySlot)
-        .filter(AvailabilitySlot.doctor_id == doctor_id, AvailabilitySlot.date == date)
-        .count()
-    )
-
-    if existing_count > 0:
-        return
-
-    start = datetime.combine(date, schedule.start_time)
-    end = datetime.combine(date, schedule.end_time)
-    duration = timedelta(minutes=schedule.slot_duration)
-
-    while start + duration <= end:
-        session.add(
-            AvailabilitySlot(
-                doctor_id=doctor_id,
-                date=date,
-                start_time=start.time(),
-                end_time=(start + duration).time(),
-                is_booked=False,
-            )
-        )
-        start += duration
-
-
-# -------------------------------------------------
-# Get Available Slots
-# -------------------------------------------------
-def get_available_slots(doctor_id, date):
-    session = get_db_session()
-    try:
-        if date < dt_date.today():
-            raise ValueError("Cannot fetch past dates")
-
-        doctor = session.get(Doctor, doctor_id)
-        if not doctor:
-            raise ValueError("Doctor not found")
-
-        existing = (
-            session.query(AvailabilitySlot)
-            .filter(
-                AvailabilitySlot.doctor_id == doctor_id, AvailabilitySlot.date == date
-            )
-            .all()
-        )
-
-        if not existing:
-            generate_slots_for_date(session, doctor_id, date)
-            session.commit()
-
-        slots = (
-            session.query(AvailabilitySlot)
-            .filter(
-                AvailabilitySlot.doctor_id == doctor_id,
-                AvailabilitySlot.date == date,
-                AvailabilitySlot.is_booked.is_(False),
-            )
-            .order_by(AvailabilitySlot.start_time)
-            .all()
-        )
-
-        return [
-            {
-                "slot_id": s.id,
-                "start_time": s.start_time.strftime("%H:%M"),
-                "end_time": s.end_time.strftime("%H:%M"),
-            }
-            for s in slots
-        ]
-    finally:
-        session.close()
-
-
-# -------------------------------------------------
-# Book Appointment (Redis + DB Lock Safe)
-# -------------------------------------------------
-def book_appointment_service(patient_id, doctor_id, slot_id):
-    session = get_db_session()
-
-    lock_key = f"lock:slot:{slot_id}"
-
-    try:
-        redis_lock = redis_client.lock(
-            lock_key, timeout=LOCK_EXPIRY_SECONDS, blocking_timeout=3
-        )
-
-        if not redis_lock.acquire(blocking=True):
-            raise ValueError("Slot is being booked by another user")
-
-        with session.begin():
-            slot = (
-                session.query(AvailabilitySlot)
-                .options(joinedload(AvailabilitySlot.doctor))
-                .filter(
-                    AvailabilitySlot.id == slot_id,
-                    AvailabilitySlot.doctor_id == doctor_id,
-                )
-                .with_for_update()
-                .first()
-            )
-
-            if not slot:
-                raise ValueError("Slot not found")
-
-            appointment_date = slot.date
-
-            if appointment_date < dt_date.today():
-                raise ValueError("Cannot book past appointments")
-
-            if slot.is_booked:
-                raise ValueError("Slot already booked")
-
-            # DB-level uniqueness should enforce this, avoid redundant query
-
-            existing_active = (
-                session.query(Appointment)
-                .filter(
-                    Appointment.patient_id == patient_id,
-                    Appointment.doctor_id == doctor_id,
-                    Appointment.status == "booked",
-                )
-                .first()
-            )
-
-            if existing_active:
-                raise ValueError(
-                    "You already have an active appointment with this doctor"
-                )
-
-            new_appointment = Appointment(
-                patient_id=patient_id,
-                doctor_id=doctor_id,
-                slot_id=slot_id,
-                appointment_date=slot.date,
-                status="booked",
-            )
-
-            session.add(new_appointment)
-            session.flush()
-
-            slot.is_booked = True
-
-            appointment_id = new_appointment.id
-
-            # enqueue billing AFTER transaction commit
-            # invoice creation handled by billing worker
-
-        enqueue_billing_job(appointment_id)
-        return {"appointment_id": appointment_id, "status": "booked"}
-
-    except IntegrityError:
-        raise ValueError("Slot already booked")
-    except Exception as e:
-        raise e
-
-    finally:
-        try:
-            if "redis_lock" in locals() and redis_lock.locked():
-                redis_lock.release()
-        except Exception:
-            pass
-        session.close()
-
-
-# -------------------------------------------------
-# Cancel Appointment (2-hour Rule)
-# -------------------------------------------------
-def cancel_appointment_service(appointment_id, patient_id):
+def get_doctor_appointments_service(doctor_id, status=None):
     session = get_db_session()
 
     try:
-        with session.begin():
-            appointment = (
-                session.query(Appointment)
-                .options(joinedload(Appointment.slot))
-                .filter(
-                    Appointment.id == appointment_id,
-                    Appointment.patient_id == patient_id,
-                )
-                .with_for_update()
-                .first()
+        if not isinstance(doctor_id, int):
+            raise ValueError("Invalid doctor_id")
+
+        query = (
+            session.query(Appointment)
+            .options(
+                joinedload(Appointment.slot),
+                joinedload(Appointment.patient),
             )
-
-            if not appointment:
-                raise ValueError("Appointment not found")
-
-            if appointment.status != "booked":
-                raise ValueError("Only booked appointments can be cancelled")
-
-            slot_datetime = datetime.combine(
-                appointment.slot.date, appointment.slot.start_time
-            )
-
-            if slot_datetime - datetime.utcnow() < timedelta(
-                hours=CANCELLATION_WINDOW_HOURS
-            ):
-                raise ValueError("Cannot cancel within 2 hours of appointment time")
-
-            appointment.status = "cancelled"
-            appointment.slot.is_booked = False
-
-            # handle invoice state
-            invoice = (
-                session.query(Invoice)
-                .filter(Invoice.appointment_id == appointment.id)
-                .first()
-            )
-
-            if invoice:
-                if invoice.status == "paid":
-                    invoice.status = "refunded"
-                    invoice.refunded_at = datetime.utcnow()  # temporary reuse
-                elif invoice.status == "pending":
-                    invoice.status = "cancelled"
-
-        return {"message": "Appointment cancelled"}
-
-    finally:
-        session.close()
-
-
-# -------------------------------------------------
-# Complete Appointment + Billing Trigger
-# -------------------------------------------------
-def complete_appointment_service(appointment_id):
-    session = get_db_session()
-
-    try:
-        with session.begin():
-            appointment = (
-                session.query(Appointment)
-                .options(joinedload(Appointment.slot))
-                .filter(Appointment.id == appointment_id)
-                .with_for_update()
-                .first()
-            )
-
-            # NOTE: you should validate doctor/admin ownership at controller level
-
-            if not appointment:
-                raise ValueError("Appointment not found")
-
-            # Idempotency
-            if appointment.status == "completed":
-                return {
-                    "appointment_id": appointment.id,
-                    "status": appointment.status,
-                    "message": "Already completed",
-                }
-
-            if appointment.status != "booked":
-                raise ValueError("Only booked appointments can be completed")
-
-            if appointment.slot.date > dt_date.today():
-                raise ValueError("Cannot complete future appointment")
-
-            appointment.status = "completed"
-            enqueue_billing_job(appointment.id)
-
-        return {
-            "appointment_id": appointment.id,
-            "status": appointment.status,
-            "message": "Appointment completed. Billing queued.",
-        }
-
-    finally:
-        session.close()
-
-
-# -------------------------------------------------
-# Get Patient Appointments
-# -------------------------------------------------
-def get_patient_appointments_service(patient_id, status=None):
-    session = get_db_session()
-
-    try:
-        query = """
-        SELECT 
-            a.id,
-            a.status,
-            s.date,
-            s.start_time,
-            s.end_time,
-            u.name AS doctor_name
-        FROM appointments a
-        JOIN availability_slots s ON a.slot_id = s.id
-        JOIN doctors d ON a.doctor_id = d.id
-        JOIN users u ON d.user_id = u.id
-        WHERE a.patient_id = :patient_id
-        """
-
-        params = {"patient_id": patient_id}
+            .filter(Appointment.doctor_id == doctor_id)
+        )
 
         if status:
-            query += " AND a.status = :status"
-            params["status"] = status
+            allowed = {"booked", "completed", "cancelled"}
+            if status not in allowed:
+                raise ValueError("Invalid status filter")
+            query = query.filter(Appointment.status == status)
 
-        query += " ORDER BY s.date DESC"
+        appointments = query.order_by(Appointment.appointment_date.desc()).all()
 
-        result = session.execute(text(query), params)
-        rows = result.fetchall()
+        result = []
+        now = datetime.now(timezone.utc)
 
-        return [
-            {
-                "appointment_id": row[0],
-                "status": row[1],
-                "date": str(row[2]),
-                "start_time": str(row[3]),
-                "end_time": str(row[4]),
-                "doctor_name": row[5],
-            }
-            for row in rows
-        ]
+        for a in appointments:
+            slot = a.slot
+
+            # Safety check (avoid NoneType crash)
+            if not slot:
+                continue
+
+            # Safe datetime handling
+            try:
+                slot_datetime = datetime.combine(slot.date, slot.start_time).replace(
+                    tzinfo=timezone.utc
+                )
+            except Exception:
+                slot_datetime = None
+
+            result.append(
+                {
+                    "appointment_id": a.id,
+                    "status": a.status,
+                    "date": str(slot.date) if slot.date else None,
+                    "start_time": str(slot.start_time) if slot.start_time else None,
+                    "end_time": str(slot.end_time) if slot.end_time else None,
+                    "patient_name": a.patient.name if a.patient else None,
+                    "is_upcoming": slot_datetime >= now if slot_datetime else False,
+                }
+            )
+
+        return result
+
+    except Exception as e:
+        print("DOCTOR APPOINTMENTS ERROR:", str(e))
+        raise
 
     finally:
         session.close()

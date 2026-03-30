@@ -68,6 +68,7 @@ def create_app():
     from controllers.availability_slot_controller import slot_bp
     from controllers.invoice_controller import invoice_bp
     from controllers.admin_controller import admin_bp
+    from backend.controllers.medical_controller import medical_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(appointment_bp, url_prefix="/api/appointments")
@@ -79,6 +80,7 @@ def create_app():
     app.register_blueprint(slot_bp, url_prefix="/api/slots")
     app.register_blueprint(invoice_bp, url_prefix="/api/invoices")
     app.register_blueprint(admin_bp)
+    app.register_blueprint(medical_bp)
 
     # -------------------------------------
     # Root Health Check

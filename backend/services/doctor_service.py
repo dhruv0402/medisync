@@ -19,8 +19,14 @@ def create_doctor_service(name, specialization, department_id):
         if not department:
             raise ValueError("Department not found")
 
+        from backend.models.user import User
+
+        user = session.query(User).filter(User.name == name).first()
+        if not user:
+            raise ValueError("User not found for doctor creation")
+
         doctor = Doctor(
-            user_id=name,  # TEMP: expecting caller to pass user_id instead of name
+            user_id=user.id,
             specialization=specialization,
             department_id=department_id,
         )

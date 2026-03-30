@@ -8,6 +8,13 @@ from backend.services.doctor_service import (
     get_doctor_by_id_service,
 )
 
+from backend.utils.db import get_db_session
+from backend.models.doctor import Doctor
+from backend.models.appointment import Appointment
+from backend.models.invoice import Invoice
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func
+
 doctor_bp = Blueprint("doctor", __name__, url_prefix="/api/doctors")
 
 
@@ -113,37 +120,34 @@ def get_my_appointments():
 
         user_id = int(get_jwt_identity())
 
-        from backend.utils.db import get_db_session
-        from backend.models.doctor import Doctor
-        from backend.models.appointment import Appointment
-        from sqlalchemy.orm import joinedload
-
         session = get_db_session()
+        try:
+            doctor = session.query(Doctor).filter(Doctor.user_id == user_id).first()
 
-        doctor = session.query(Doctor).filter(Doctor.user_id == user_id).first()
+            if not doctor:
+                return jsonify({"error": "Doctor not found"}), 404
 
-        if not doctor:
-            return jsonify({"error": "Doctor not found"}), 404
+            appointments = (
+                session.query(Appointment)
+                .options(joinedload(Appointment.slot))
+                .filter(Appointment.doctor_id == doctor.id)
+                .all()
+            )
 
-        appointments = (
-            session.query(Appointment)
-            .options(joinedload(Appointment.slot))
-            .filter(Appointment.doctor_id == doctor.id)
-            .all()
-        )
+            result = [
+                {
+                    "appointment_id": a.id,
+                    "status": a.status,
+                    "date": str(a.slot.date),
+                    "start_time": str(a.slot.start_time),
+                    "end_time": str(a.slot.end_time),
+                }
+                for a in appointments
+            ]
 
-        result = [
-            {
-                "appointment_id": a.id,
-                "status": a.status,
-                "date": str(a.slot.date),
-                "start_time": str(a.slot.start_time),
-                "end_time": str(a.slot.end_time),
-            }
-            for a in appointments
-        ]
-
-        return jsonify({"count": len(result), "appointments": result}), 200
+            return jsonify({"count": len(result), "appointments": result}), 200
+        finally:
+            session.close()
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -164,27 +168,24 @@ def get_my_earnings():
 
         user_id = int(get_jwt_identity())
 
-        from backend.utils.db import get_db_session
-        from backend.models.doctor import Doctor
-        from backend.models.invoice import Invoice
-        from sqlalchemy import func
-
         session = get_db_session()
+        try:
+            doctor = session.query(Doctor).filter(Doctor.user_id == user_id).first()
 
-        doctor = session.query(Doctor).filter(Doctor.user_id == user_id).first()
+            if not doctor:
+                return jsonify({"error": "Doctor not found"}), 404
 
-        if not doctor:
-            return jsonify({"error": "Doctor not found"}), 404
+            total = (
+                session.query(func.sum(Invoice.total_amount))
+                .filter(Invoice.doctor_id == doctor.id, Invoice.status == "paid")
+                .scalar()
+            )
 
-        total = (
-            session.query(func.sum(Invoice.total_amount))
-            .filter(Invoice.doctor_id == doctor.id, Invoice.status == "paid")
-            .scalar()
-        )
-
-        return jsonify(
-            {"doctor_id": doctor.id, "total_earnings": float(total or 0)}
-        ), 200
+            return jsonify(
+                {"doctor_id": doctor.id, "total_earnings": float(total or 0)}
+            ), 200
+        finally:
+            session.close()
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
