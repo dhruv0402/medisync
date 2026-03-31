@@ -15,10 +15,14 @@ def create_invoice_for_appointment(session, appointment):
     Idempotent and concurrency-safe (DB unique constraint enforced).
     """
 
+    if not appointment:
+        raise ValueError("Invalid appointment")
+
+    if not hasattr(appointment, "doctor") or not appointment.doctor:
+        raise ValueError("Doctor data not loaded for appointment")
+
     # Fast idempotency check
-    existing = (
-        session.query(Invoice).filter(Invoice.appointment_id == appointment.id).first()
-    )
+    existing = session.query(Invoice).filter_by(appointment_id=appointment.id).first()
     if existing:
         return existing
 
@@ -51,9 +55,7 @@ def create_invoice_for_appointment(session, appointment):
         session.expire_all()
 
         existing = (
-            session.query(Invoice)
-            .filter(Invoice.appointment_id == appointment.id)
-            .first()
+            session.query(Invoice).filter_by(appointment_id=appointment.id).first()
         )
 
         if not existing:
@@ -80,6 +82,9 @@ def pay_invoice(invoice_id):
 
         if invoice.status == "refunded":
             raise ValueError("Cannot pay a refunded invoice")
+
+        if invoice.status == "cancelled":
+            raise ValueError("Cannot pay a cancelled invoice")
 
         invoice.status = "paid"
         invoice.paid_at = datetime.now(timezone.utc)
@@ -109,6 +114,9 @@ def refund_invoice(invoice_id):
 
         if not invoice:
             raise ValueError("Invoice not found")
+
+        if invoice.status == "refunded":
+            raise ValueError("Invoice already refunded")
 
         if invoice.status != "paid":
             raise ValueError("Only paid invoices can be refunded")

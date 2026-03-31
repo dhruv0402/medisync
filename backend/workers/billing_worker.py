@@ -4,6 +4,7 @@ from backend.utils.redis_client import redis_client
 from backend.utils.db import get_db_session
 from backend.models.appointment import Appointment
 from backend.services.billing_service import create_invoice_for_appointment
+from sqlalchemy.orm import joinedload
 
 BILLING_QUEUE = "billing_queue"
 
@@ -17,16 +18,21 @@ def process_job(job_data):
             print("❌ Invalid job data:", job_data)
             return
 
-        appointment = session.query(Appointment).get(appointment_id)
+        appointment = (
+            session.query(Appointment)
+            .options(joinedload(Appointment.doctor))
+            .filter(Appointment.id == appointment_id)
+            .first()
+        )
 
         if not appointment:
             print(f"❌ Appointment not found: {appointment_id}")
             return
 
-        create_invoice_for_appointment(session, appointment)
+        invoice = create_invoice_for_appointment(session, appointment)
         session.commit()
 
-        print(f"✅ Invoice created for appointment {appointment_id}")
+        print(f"✅ Invoice ready | id={invoice.id} | appointment={appointment_id}")
 
     except Exception as e:
         session.rollback()

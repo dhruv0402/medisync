@@ -33,14 +33,14 @@ def create_doctor():
 
         data = request.get_json()
 
-        name = data.get("name")
+        user_id = data.get("user_id")
         specialization = data.get("specialization")
         department_id = data.get("department_id")
 
-        if not all([name, specialization, department_id]):
+        if not all([user_id, specialization, department_id]):
             return jsonify({"error": "Missing required fields"}), 400
 
-        result = create_doctor_service(name, specialization, department_id)
+        result = create_doctor_service(user_id, specialization, department_id)
 
         return jsonify(
             {"message": "Doctor created successfully", "doctor": result}

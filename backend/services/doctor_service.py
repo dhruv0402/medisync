@@ -1,17 +1,31 @@
 from sqlalchemy.exc import SQLAlchemyError
 from backend.models.doctor import Doctor
 from backend.models.department import Department
+from backend.models.user import User
 from backend.utils.db import get_db_session
 
 
 # ---------------------------------------
 # Create Doctor
 # ---------------------------------------
-def create_doctor_service(name, specialization, department_id):
+def create_doctor_service(user_id, specialization, department_id):
     session = get_db_session()
 
     try:
-        # Validate department exists
+        # ✅ Validate user exists and role
+        user = session.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValueError("User not found")
+
+        if user.role != "doctor":
+            raise ValueError("User must have doctor role")
+
+        # ✅ Prevent duplicate doctor profile for same user
+        existing = session.query(Doctor).filter(Doctor.user_id == user_id).first()
+        if existing:
+            raise ValueError("Doctor profile already exists for this user")
+
+        # ✅ Validate department exists
         department = (
             session.query(Department).filter(Department.id == department_id).first()
         )
@@ -19,14 +33,8 @@ def create_doctor_service(name, specialization, department_id):
         if not department:
             raise ValueError("Department not found")
 
-        from backend.models.user import User
-
-        user = session.query(User).filter(User.name == name).first()
-        if not user:
-            raise ValueError("User not found for doctor creation")
-
         doctor = Doctor(
-            user_id=user.id,
+            user_id=user_id,
             specialization=specialization,
             department_id=department_id,
         )
@@ -37,7 +45,7 @@ def create_doctor_service(name, specialization, department_id):
 
         return {
             "id": doctor.id,
-            "name": doctor.user.name if doctor.user else None,
+            "name": user.name,
             "specialization": doctor.specialization,
             "department_id": doctor.department_id,
         }
@@ -58,7 +66,6 @@ def get_all_doctors_service():
 
     try:
         doctors = session.query(Doctor).all()
-        print("Fetched doctors:", doctors)
 
         return [
             {
